@@ -1,0 +1,1087 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>CHAOS MINESWEEPER: FINAL CUT</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+
+        :root {
+            --primary: #0f0;
+            --danger: #ff003c;
+            --warn: #ffcc00;
+            --bg: #050505;
+            --panel: rgba(10, 20, 10, 0.95);
+        }
+
+        /* CHRISTMAS THEME VARIABLES */
+        .theme-christmas {
+            --primary: #00eaff; /* Ice Blue */
+            --danger: #ff2a2a;  /* Christmas Red */
+            --bg: #020a12;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--primary);
+            font-family: 'Share Tech Mono', monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            min-height: 100vh;
+            margin: 0;
+            overflow: hidden;
+            user-select: none;
+            cursor: default;
+            transition: background-color 0.5s, filter 0.5s;
+        }
+
+        /* Scanlines */
+        body::after {
+            content: " ";
+            display: block; position: fixed; top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            z-index: 9000; background-size: 100% 2px, 3px 100%; pointer-events: none;
+        }
+
+        /* SNOW EFFECT (Christmas) */
+        #snow-container {
+            position: fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index: 8000; display: none;
+        }
+        .theme-christmas #snow-container { display: block; }
+        .snowflake {
+            position: absolute; top: -10px; background: white; width: 3px; height: 3px; border-radius: 50%; opacity: 0.8;
+            animation: fall linear infinite;
+        }
+        @keyframes fall { to { transform: translateY(100vh); } }
+
+        /* МЕНЮ */
+        #main-menu {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.98); z-index: 2000;
+            display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 15px;
+            transition: opacity 0.5s;
+        }
+        .menu-title { font-size: 40px; color: var(--primary); text-shadow: 0 0 20px var(--primary); margin-bottom: 20px; animation: glitchText 3s infinite; }
+        
+        .difficulty-btn {
+            padding: 15px 40px; font-size: 22px; font-family: inherit;
+            border: 2px solid var(--primary); background: transparent; color: var(--primary);
+            cursor: pointer; transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+            text-transform: uppercase; letter-spacing: 2px;
+            width: 450px; position: relative; overflow: hidden;
+        }
+        .difficulty-btn:hover { color: #000; box-shadow: 0 0 30px var(--primary); transform: scale(1.05); background: var(--primary); }
+        .difficulty-btn:active { transform: scale(0.95); }
+
+        /* Practice Button Masked */
+        .btn-practice { border-color: #555; color: #555; text-decoration: line-through; }
+        .btn-practice:hover { background: #333; box-shadow: 0 0 30px #333; color: #fff; border-color: #fff; text-decoration: none; }
+        
+        .btn-xmas { border-color: #fff; color: #fff; text-shadow: 0 0 10px #00eaff; }
+        .btn-xmas:hover { background: #fff; color: #000; box-shadow: 0 0 30px #fff; }
+
+        .menu-desc { font-size: 14px; color: #888; margin-top: -10px; margin-bottom: 10px; font-style: italic; }
+
+        /* ИНТЕРФЕЙС */
+        #ui-panel {
+            display: none; gap: 15px; margin-bottom: 15px; z-index: 100;
+            position: sticky; top: 0; background: var(--panel);
+            padding: 10px 20px; border: 1px solid #333; border-top: none;
+            border-radius: 0 0 15px 15px; align-items: center;
+            backdrop-filter: blur(5px);
+            animation: slideDown 0.5s ease-out;
+            flex-wrap: wrap; justify-content: center;
+        }
+        @keyframes slideDown { from { transform: translateY(-100%); } to { transform: translateY(0); } }
+
+        .stat-box { font-size: 20px; font-weight: bold; white-space: nowrap; }
+        #lives-display { color: var(--danger); text-shadow: 0 0 10px var(--danger); letter-spacing: 3px; }
+        #timer-display { color: #fff; min-width: 70px; }
+        #mine-display { color: var(--warn); min-width: 70px; }
+        #flag-display { color: #00eaff; min-width: 70px; }
+
+        #status-bar {
+            display: none; padding: 8px 20px; border: 1px solid var(--primary);
+            min-width: 450px; text-align: center; background: #000;
+            box-shadow: 0 0 15px rgba(0, 255, 0, 0.1); font-size: 16px; margin-bottom: 20px;
+            font-weight: bold; color: var(--primary); text-transform: uppercase; z-index: 100;
+            transition: color 0.3s, border-color 0.3s;
+        }
+
+        #game-container {
+            overflow: visible; /* Changed for flip effect */
+            max-width: 100vw;
+            max-height: 80vh;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            perspective: 1000px;
+        }
+
+        #game-board {
+            display: none; gap: 4px; padding: 15px; background: #111;
+            border: 2px solid #333; box-shadow: 0 0 30px rgba(0,0,0,0.8);
+            transition: transform 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.5s;
+            transform: scale(0.9); opacity: 0;
+            transform-style: preserve-3d;
+        }
+        #game-board.active { transform: scale(1); opacity: 1; }
+        
+        /* Board Flip Class */
+        #game-board.flipped { transform: rotate(180deg) scale(1) !important; }
+        
+        /* Pulse Class */
+        #game-board.pulsing { animation: heartbeat 0.8s infinite alternate; }
+        @keyframes heartbeat { from { transform: scale(0.95); } to { transform: scale(1.05); } }
+
+        /* КЛЕТКИ */
+        .cell {
+            width: 40px; height: 40px;
+            background: linear-gradient(145deg, #222, #1a1a1a);
+            border: 1px solid #333; display: flex; align-items: center; justify-content: center;
+            font-weight: bold; cursor: pointer; border-radius: 4px; font-size: 20px;
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            position: relative;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        
+        .cell:hover { 
+            background: #333; 
+            border-color: var(--primary); 
+            box-shadow: 0 0 15px var(--primary); 
+            z-index: 10; 
+            transform: translateY(-3px) scale(1.1); 
+        }
+        
+        .cell.open { 
+            background: #000; 
+            border-color: #222; 
+            transform: none; 
+            z-index: 1; 
+            box-shadow: inset 2px 2px 5px rgba(0,0,0,0.8);
+            animation: cellPop 0.3s ease-out forwards;
+        }
+        
+        @keyframes cellPop {
+            0% { transform: scale(0.8); opacity: 0.5; }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .c-1 { color: #00e5ff; text-shadow: 0 0 5px #00e5ff; }
+        .c-2 { color: #00ff00; text-shadow: 0 0 5px #00ff00; }
+        .c-3 { color: #ff3333; text-shadow: 0 0 5px #ff3333; }
+        .c-4 { color: #aa00ff; text-shadow: 0 0 5px #aa00ff; }
+        .c-5 { color: #ffaa00; }
+
+        .theme-christmas .c-1 { color: #fff; text-shadow: 0 0 5px #fff; }
+        .theme-christmas .c-2 { color: #00eaff; }
+        .theme-christmas .c-3 { color: #0055ff; }
+
+        .cell.flag { background: #333; color: #ffd700; border-color: #ffd700; animation: flagPlant 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .theme-christmas .cell.flag { color: #ff0000; border-color: #ff0000; text-shadow: 0 0 5px red; }
+        
+        @keyframes flagPlant { 0% { transform: scale(0) rotate(-45deg); } 100% { transform: scale(1) rotate(0deg); } }
+        
+        .cell.mine-hit, .cell.mine-fatal {
+            background: var(--danger); color: #fff; 
+            border: 2px solid #fff;
+            animation: scaryPulse 0.8s infinite alternate;
+            z-index: 100;
+        }
+        
+        @keyframes scaryPulse {
+            0% { transform: scale(1); box-shadow: 0 0 5px var(--danger); }
+            100% { transform: scale(1.15); box-shadow: 0 0 25px var(--danger), inset 0 0 10px #000; }
+        }
+
+        @keyframes shockwave-anim { 0% { transform: scale(1); background: #222; } 50% { transform: scale(1.5); background: var(--danger); z-index: 50; } 100% { transform: scale(1); background: #000; } }
+        .cell-shockwave { animation: shockwave-anim 0.5s ease-out; }
+        .cell-crater { background: #220000 !important; box-shadow: inset 0 0 10px #500; border-color: #500 !important; }
+
+        /* СПЕЦ ЭФФЕКТЫ */
+        
+        .math-mode .cell.open {
+            font-size: 11px;
+            color: #fff;
+            font-family: monospace;
+            letter-spacing: -1px;
+            background: #001100;
+            border-color: #0f0;
+        }
+
+        /* Выключить свет / Завірюха */
+        #darkness-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle 600px at var(--x) var(--y), transparent 0%, rgba(0,0,0,0.98) 20%);
+            z-index: 8000; pointer-events: none; opacity: 0; transition: opacity 1s;
+        }
+        .lights-out-active #darkness-overlay { opacity: 1; }
+        
+        /* Blizzard Mode */
+        .blizzard-active #darkness-overlay {
+            background: radial-gradient(circle 400px at var(--x) var(--y), transparent 0%, rgba(200, 220, 255, 0.95) 40%);
+            opacity: 1;
+        }
+        
+        /* Monochrome Mode */
+        .monochrome-active { filter: grayscale(100%) contrast(1.2); }
+
+        .morph-active .cell { border-radius: 50%; transform: rotate(180deg); }
+        .morph-active .cell.open { border-radius: 5px; transform: rotate(0deg); }
+
+        /* Скользкая мышь */
+        #custom-cursor {
+            position: fixed; width: 24px; height: 24px;
+            border: 3px solid #ff003c; border-radius: 50%;
+            background: rgba(255, 0, 60, 0.1);
+            pointer-events: none; z-index: 9999;
+            transform: translate(-50%, -50%);
+            display: none; box-shadow: 0 0 15px #ff003c;
+            transition: width 0.1s, height 0.1s;
+        }
+        #custom-cursor::after {
+            content: ''; position: absolute; top: 50%; left: 50%; width: 4px; height: 4px; background: #fff;
+            transform: translate(-50%, -50%); border-radius: 50%;
+        }
+        .slippery-mode { cursor: none !important; }
+        .slippery-mode .cell:hover { transform: none; box-shadow: none; border-color: #333; } 
+        .slippery-mode #custom-cursor { display: block; }
+        
+        @keyframes horror-throb { 0% { background-color: #050505; } 50% { background-color: #1a0000; } 100% { background-color: #050505; } }
+        .horror-mode { animation: horror-throb 1s infinite ease-in-out; }
+        .horror-mode .cell { border-color: #300; }
+        
+        /* Flash for meteor */
+        #flash-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #fff; opacity: 0; pointer-events: none; z-index: 9999;
+            transition: opacity 0.1s;
+        }
+        .flash-active { animation: flash-bang 1.5s ease-out forwards; }
+        @keyframes flash-bang { 0% { opacity: 1; } 100% { opacity: 0; } }
+        .violent-shake { animation: v-shake 0.5s cubic-bezier(.36,.07,.19,.97) both; transform: translate3d(0, 0, 0); }
+        @keyframes v-shake { 10%, 90% { transform: translate3d(-5px, 0, 0); } 20%, 80% { transform: translate3d(5px, 0, 0); } 30%, 50%, 70% { transform: translate3d(-10px, 0, 0); } 40%, 60% { transform: translate3d(10px, 0, 0); } }
+
+
+        button { padding: 5px 15px; background: transparent; border: 1px solid var(--primary); color: var(--primary); font-family: inherit; cursor: pointer; text-transform: uppercase; font-weight: bold; transition: 0.2s; }
+        button:hover { background: var(--primary); color: #000; }
+        
+        #music-start-btn { position: absolute; bottom: 20px; opacity: 0.5; }
+
+    </style>
+</head>
+<body>
+
+    <div id="snow-container"></div>
+    <div id="darkness-overlay"></div>
+    <div id="flash-overlay"></div>
+    <div id="custom-cursor"></div>
+
+    <div id="main-menu">
+        <div class="menu-title">SELECT PROTOCOL</div>
+        <button class="difficulty-btn btn-easy" onclick="startGame('easy', 'standard')">ЛЕГКО (EASY)</button>
+        <div class="menu-desc">Расслабленный режим. Меньше мин.</div>
+        <button class="difficulty-btn btn-hard" onclick="startGame('hard', 'standard')">СЛОЖНО (HARD)</button>
+        <div class="menu-desc">Стандартный протокол выживания.</div>
+        
+        <button class="difficulty-btn btn-practice" onclick="startGame('hard', 'practice')">⛔ ЗАПРЕТНАЯ ЗОНА (RESTRICTED)</button>
+        <div class="menu-desc">ДОСТУП ЗАПРЕЩЕН. НЕ НАЖИМАТЬ.</div>
+        
+        <button class="difficulty-btn btn-xmas" onclick="startGame('hard', 'christmas')">CHRISTMAS</button>
+        <div class="menu-desc">Зимняя атмосфера и подарки.</div>
+        
+        <button id="music-start-btn" onclick="toggleMusic()">[ ВКЛЮЧИТЬ МУЗЫКУ ]</button>
+    </div>
+
+    <div id="ui-panel">
+        <div class="stat-box" id="level-display">LVL: 1</div>
+        <div class="stat-box" id="lives-display">❤❤❤</div>
+        <div class="stat-box" id="timer-display">00:00</div>
+        <div class="stat-box" id="mine-display">💣 --</div>
+        <div class="stat-box" id="flag-display">🚩 0</div>
+        <button onclick="returnToMenu()">МЕНЮ</button>
+        <button id="sfx-btn" onclick="toggleSFX()">SFX: ВКЛ</button>
+        <button id="music-btn" onclick="toggleMusic()">МУЗ: ВКЛ</button>
+    </div>
+
+    <h1 id="game-title" style="display:none">CHAOS PROTOCOL</h1>
+    <div id="status-bar">Ожидание...</div>
+    
+    <div id="game-container">
+        <div id="game-board"></div>
+    </div>
+
+    <script>
+        /* =========================================
+           ДВИЖОК
+           ========================================= */
+        let gameState = {
+            level: 1, rows: 6, cols: 6, lives: 3, difficulty: 'hard', mode: 'standard',
+            gameOver: false, isLevelStart: true, board: []
+        };
+
+        const DIFFICULTIES = {
+            easy: { lives: 1, mineDensity: 0.22, eventInterval: 5000, name: ">>> РЕЖИМ: ЛЕГКАЯ ПРОГУЛКА <<<" },
+            hard: { lives: 3, mineDensity: 0.16, eventInterval: 10000, name: "РЕЖИМ: СТАНДАРТНАЯ ОПЕРАЦИЯ" }
+        };
+
+        let eventTimer = null;
+        let gameTimerInterval = null;
+        let startTime = 0;
+        let sfxEnabled = true;
+        let musicEnabled = false;
+        let audioCtx;
+        
+        // Переменные для скользкой мыши
+        let cursorX = window.innerWidth / 2, cursorY = window.innerHeight / 2;
+        let mouseX = window.innerWidth / 2, mouseY = window.innerHeight / 2;
+        let cursorVelX = 0, cursorVelY = 0;
+        let slipperyActive = false;
+        let slipperyFrame = null;
+        const cursorEl = document.getElementById('custom-cursor');
+
+        /* =========================================
+           АУДИО
+           ========================================= */
+        let musicInterval = null;
+        let noteIndex = 0;
+        let currentTrack = 'menu';
+
+        const tracks = {
+            menu: { tempo: 600, bass: [55, 0, 55, 65, 55, 0, 49, 49], lead: [220, 0, 0, 0, 261, 0, 0, 0], type: 'sine' },
+            horror: { tempo: 150, bass: [35, 36, 35, 38, 35, 41, 35, 36], lead: [0, 800, 0, 820, 0, 900, 0, 750], type: 'sawtooth' }, 
+            game: { tempo: 200, bass: [110, 110, 0, 110, 130, 110, 98, 98], lead: [0, 440, 0, 523, 0, 440, 0, 392], type: 'square' },
+            christmas: { tempo: 300, bass: [130, 0, 196, 0, 130, 0, 196, 0], lead: [523, 587, 659, 523, 659, 783], type: 'triangle' }
+        };
+
+        function initAudio() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+        }
+
+        function toggleMusic() {
+            initAudio();
+            musicEnabled = !musicEnabled;
+            const btn = document.getElementById('music-btn');
+            const menuBtn = document.getElementById('music-start-btn');
+            if (musicEnabled) {
+                btn.innerText = "МУЗ: ВКЛ"; menuBtn.innerText = "МУЗЫКА ИГРАЕТ"; startMusicLoop();
+            } else {
+                btn.innerText = "МУЗ: ВЫКЛ"; menuBtn.innerText = "[ ВКЛЮЧИТЬ МУЗЫКУ ]"; stopMusicLoop();
+            }
+        }
+
+        function startMusicLoop() {
+            if (musicInterval) clearInterval(musicInterval);
+            if (!musicEnabled) return;
+            noteIndex = 0;
+            const track = tracks[currentTrack];
+            playStep(track);
+            musicInterval = setInterval(() => playStep(track), track.tempo);
+        }
+
+        function stopMusicLoop() { if (musicInterval) clearInterval(musicInterval); }
+        function switchTrack(trackName) { currentTrack = trackName; if (musicEnabled) startMusicLoop(); }
+
+        function playStep(track) {
+            if (!audioCtx || !musicEnabled) return;
+            const bassNote = track.bass[noteIndex % track.bass.length];
+            if (bassNote > 0) {
+                let vol = currentTrack === 'horror' ? 0.3 : 0.2;
+                playSynthNote(bassNote, track.type, 0.2, vol, 300);
+            }
+            const leadNote = track.lead[noteIndex % track.lead.length];
+            if (leadNote > 0) playSynthNote(leadNote, 'sine', 0.3, 0.1, 800);
+            noteIndex++;
+        }
+
+        function playSynthNote(freq, type, duration, vol, filterFreq) {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            const filter = audioCtx.createBiquadFilter();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(filterFreq, audioCtx.currentTime);
+            gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+            osc.connect(filter); filter.connect(gain); gain.connect(audioCtx.destination);
+            osc.start(); osc.stop(audioCtx.currentTime + duration);
+        }
+
+        function toggleSFX() {
+            sfxEnabled = !sfxEnabled;
+            document.getElementById('sfx-btn').innerText = sfxEnabled ? "SFX: ВКЛ" : "SFX: ВЫКЛ";
+            if(sfxEnabled) initAudio();
+        }
+
+        function playTone(freq, type, duration, vol=0.1) {
+            if (!sfxEnabled || !audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.start(); osc.stop(audioCtx.currentTime + duration);
+        }
+
+        function playSound(name) {
+            initAudio();
+            switch(name) {
+                case 'start': playTone(400, 'square', 0.1); break;
+                case 'click': playTone(1200, 'sine', 0.05); break;
+                case 'flag': playTone(300, 'triangle', 0.05); break;
+                case 'levelup': playTone(600, 'sine', 0.3); break;
+                case 'hit': playTone(100, 'sawtooth', 0.2, 0.5); break;
+                case 'die': playTone(50, 'sawtooth', 2.0, 0.6); break;
+                case 'event': playTone(1500, 'sawtooth', 0.5, 0.05); break;
+                case 'explosion': playTone(80, 'square', 0.5, 0.3); break;
+                case 'trap': playTone(50, 'square', 1.0, 0.5); break;
+                case 'slide': playTone(800, 'triangle', 0.1, 0.02); break;
+                case 'math': playTone(600, 'square', 0.3, 0.1); break;
+                case 'falling': playTone(1200, 'sawtooth', 1.0, 0.1); break;
+                case 'boom': playTone(60, 'square', 0.8, 0.8); break;
+                case 'flip': playTone(300, 'sawtooth', 1.0, 0.2); break;
+            }
+        }
+
+        /* =========================================
+           УПРАВЛЕНИЕ ИГРОЙ
+           ========================================= */
+        const menuEl = document.getElementById('main-menu');
+        const uiPanel = document.getElementById('ui-panel');
+        const boardEl = document.getElementById('game-board');
+        const statusEl = document.getElementById('status-bar');
+        const titleEl = document.getElementById('game-title');
+        const levelDisplay = document.getElementById('level-display');
+        const livesDisplay = document.getElementById('lives-display');
+        const timerDisplay = document.getElementById('timer-display');
+        const mineDisplay = document.getElementById('mine-display');
+        const flagDisplay = document.getElementById('flag-display');
+        const flashOverlay = document.getElementById('flash-overlay');
+        const snowContainer = document.getElementById('snow-container');
+
+        // Init Snow
+        for(let i=0; i<50; i++) {
+            let s = document.createElement('div');
+            s.className = 'snowflake';
+            s.style.left = Math.random() * 100 + '%';
+            s.style.animationDuration = (2 + Math.random() * 5) + 's';
+            s.style.animationDelay = Math.random() * 5 + 's';
+            snowContainer.appendChild(s);
+        }
+
+        // ГЛОБАЛЬНЫЙ ТРЕКИНГ МЫШИ
+        document.addEventListener('mousemove', (e) => {
+            const r = document.body.getBoundingClientRect();
+            document.documentElement.style.setProperty('--x', e.clientX + 'px');
+            document.documentElement.style.setProperty('--y', e.clientY + 'px');
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+        });
+
+        // ПЕРЕХВАТ КЛИКА ДЛЯ "СКОЛЬЗКОЙ МЫШИ"
+        document.addEventListener('mousedown', (e) => {
+            if (slipperyActive && !gameState.gameOver) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                let target = document.elementFromPoint(cursorX, cursorY);
+                if (target && target.classList.contains('cell')) {
+                    target.style.transform = "scale(0.9)";
+                    setTimeout(() => target.style.transform = "", 100);
+                    let r = parseInt(target.dataset.r);
+                    let c = parseInt(target.dataset.c);
+                    if (e.button === 2) toggleFlag(r, c);
+                    else clickCell(r, c);
+                }
+            }
+        }, true);
+
+        function startGame(diff, mode) {
+            gameState.difficulty = diff;
+            gameState.mode = mode;
+
+            // Apply Theme
+            document.body.className = ''; // Reset
+            if (mode === 'christmas') {
+                document.body.classList.add('theme-christmas');
+                switchTrack('christmas');
+                playSound('start');
+            } else if (diff === 'easy') {
+                document.body.classList.add('horror-mode');
+                switchTrack('horror');
+                playSound('trap');
+            } else {
+                switchTrack('game');
+                playSound('start');
+            }
+
+            menuEl.style.display = 'none';
+            uiPanel.style.display = 'flex';
+            boardEl.style.display = 'grid';
+            statusEl.style.display = 'block';
+            titleEl.style.display = 'block';
+
+            boardEl.classList.remove('active');
+            setTimeout(() => boardEl.classList.add('active'), 100);
+
+            gameState.level = 1; gameState.rows = 6; gameState.cols = 6;
+            gameState.gameOver = false; gameState.isLevelStart = true;
+            gameState.lives = DIFFICULTIES[diff].lives;
+
+            if(mode === 'practice') statusEl.innerText = "⚠ ВНИМАНИЕ: ЗОНА АНОМАЛЬНОЙ АКТИВНОСТИ";
+            else if(mode === 'christmas') statusEl.innerText = "СЧАСТЛИВОГО РОЖДЕСТВА! НЕ ПОДОРВИСЬ НА ПОДАРКЕ.";
+            else statusEl.innerText = DIFFICULTIES[diff].name;
+            
+            statusEl.style.color = diff === 'easy' ? 'red' : 'var(--primary)';
+            if(mode === 'christmas') statusEl.style.color = '#fff';
+
+            startTimer();
+            clearAllEffects();
+            initLevel();
+        }
+
+        function startTimer() {
+            if(gameTimerInterval) clearInterval(gameTimerInterval);
+            startTime = Date.now();
+            timerDisplay.innerText = "00:00";
+            gameTimerInterval = setInterval(() => {
+                let delta = Math.floor((Date.now() - startTime) / 1000);
+                let m = Math.floor(delta / 60).toString().padStart(2, '0');
+                let s = (delta % 60).toString().padStart(2, '0');
+                timerDisplay.innerText = `${m}:${s}`;
+            }, 1000);
+        }
+
+        function returnToMenu() {
+            clearInterval(eventTimer);
+            clearInterval(gameTimerInterval);
+            menuEl.style.display = 'flex';
+            uiPanel.style.display = 'none';
+            boardEl.style.display = 'none';
+            statusEl.style.display = 'none';
+            titleEl.style.display = 'none';
+            document.body.className = '';
+            clearAllEffects();
+            switchTrack('menu');
+        }
+
+        function initLevel() {
+            updateUI();
+            updateStats();
+            gameState.board = [];
+            for (let r = 0; r < gameState.rows; r++) {
+                let row = [];
+                for (let c = 0; c < gameState.cols; c++) {
+                    row.push({ r, c, isMine: false, isOpen: false, isFlag: false, count: 0, isNewZone: true });
+                }
+                gameState.board.push(row);
+            }
+            renderBoard();
+        }
+
+        function updateUI() {
+            levelDisplay.innerText = `LVL: ${gameState.level}`;
+            livesDisplay.innerText = "❤".repeat(gameState.lives);
+            livesDisplay.style.color = gameState.lives === 1 ? 'red' : 'var(--danger)';
+        }
+
+        function updateStats() {
+            if(gameState.isLevelStart && gameState.level === 1) {
+                mineDisplay.innerText = "💣 --";
+                flagDisplay.innerText = "🚩 0";
+                return;
+            }
+            let mines = 0;
+            let flags = 0;
+            gameState.board.flat().forEach(c => {
+                if(c.isMine) mines++;
+                if(c.isFlag) flags++;
+            });
+            mineDisplay.innerText = `💣 ${mines}`;
+            flagDisplay.innerText = `🚩 ${flags}`;
+        }
+
+        function nextLevel() {
+            gameState.level++;
+            if (gameState.lives < 3 && gameState.difficulty === 'hard') gameState.lives++;
+            playSound('levelup');
+            
+            let oldRows = gameState.rows;
+            let oldCols = gameState.cols;
+            const expansion = 5;
+            gameState.rows += expansion;
+            gameState.cols += expansion;
+            const halfExp = Math.floor(expansion/2);
+
+            let newBoard = [];
+            for(let r=0; r<gameState.rows; r++){
+                let row = [];
+                for(let c=0; c<gameState.cols; c++){
+                    let oldR = r - halfExp;
+                    let oldC = c - halfExp;
+                    if(oldR >= 0 && oldR < oldRows && oldC >= 0 && oldC < oldCols) {
+                        let cell = gameState.board[oldR][oldC];
+                        cell.r = r; cell.c = c;
+                        row.push(cell);
+                    } else {
+                        row.push({ r, c, isMine: false, isOpen: false, isFlag: false, count: 0, isNewZone: true });
+                    }
+                }
+                newBoard.push(row);
+            }
+            gameState.board = newBoard;
+            gameState.isLevelStart = true;
+            
+            recalculateNumbers();
+            
+            let safeZonesToExpand = [];
+            for(let r=0; r<gameState.rows; r++){
+                for(let c=0; c<gameState.cols; c++){
+                    let cell = gameState.board[r][c];
+                    if(cell.isOpen && cell.count === 0 && !cell.isMine) {
+                        safeZonesToExpand.push(cell);
+                    }
+                }
+            }
+            renderBoard(); 
+            safeZonesToExpand.forEach(cell => floodFill(cell.r, cell.c));
+            updateStats();
+        }
+
+        /* =========================================
+           РЕНДЕР
+           ========================================= */
+        function renderBoard() {
+            boardEl.innerHTML = '';
+            boardEl.style.gridTemplateColumns = `repeat(${gameState.cols}, 40px)`;
+            
+            for(let r=0; r<gameState.rows; r++){
+                for(let c=0; c<gameState.cols; c++){
+                    const cellData = gameState.board[r][c];
+                    const div = document.createElement('div');
+                    div.className = 'cell';
+                    div.dataset.r = r;
+                    div.dataset.c = c;
+
+                    if(cellData.isOpen) {
+                        div.classList.add('open');
+                        if(cellData.isMine) {
+                            div.classList.add('mine-hit');
+                            div.innerText = 'X';
+                        } else if(cellData.count > 0) {
+                            if(document.body.classList.contains('math-mode')) {
+                                div.innerText = generateMathEquation(cellData.count);
+                            } else {
+                                div.innerText = cellData.count;
+                            }
+                            div.classList.add(`c-${cellData.count}`);
+                        }
+                    } else if(cellData.isFlag) {
+                        div.classList.add('flag');
+                        div.innerText = '!';
+                    }
+
+                    div.oncontextmenu = (e) => {
+                        e.preventDefault();
+                        if(!slipperyActive) toggleFlag(r,c);
+                    };
+                    div.onclick = () => {
+                        if(!slipperyActive) clickCell(r,c);
+                    };
+
+                    cellData.element = div;
+                    boardEl.appendChild(div);
+                }
+            }
+        }
+
+        function toggleFlag(r, c) {
+            if(gameState.gameOver) return;
+            const cell = gameState.board[r][c];
+            
+            if (cell.isOpen) {
+                tryChord(r, c);
+                return;
+            }
+
+            cell.isFlag = !cell.isFlag;
+            cell.element.classList.toggle('flag');
+            cell.element.innerText = cell.isFlag ? '!' : '';
+            playSound('flag');
+            updateStats();
+        }
+
+        function clickCell(r, c) {
+            const cell = gameState.board[r][c];
+            if(gameState.gameOver || cell.isFlag) return;
+            
+            if(cell.isOpen) {
+                tryChord(r, c);
+                return;
+            }
+
+            if(gameState.isLevelStart) {
+                generateMines(r, c);
+                gameState.isLevelStart = false;
+                initAudio();
+                startEventTimer();
+                recalculateNumbers();
+                if(!musicEnabled) toggleMusic(); 
+                updateStats();
+            }
+
+            cell.isOpen = true;
+            cell.element.classList.add('open');
+
+            if(cell.isMine) {
+                gameState.lives--;
+                updateUI();
+                cell.element.classList.add('mine-hit');
+                cell.element.innerText = 'X';
+                triggerShockwave(r, c);
+
+                if(gameState.lives <= 0) {
+                    playSound('die');
+                    gameOver(false);
+                } else {
+                    playSound('hit');
+                    statusEl.innerText = "КРИТИЧЕСКОЕ ПОВРЕЖДЕНИЕ!";
+                }
+            } else {
+                playSound('click');
+                if(cell.count > 0) {
+                    if(document.body.classList.contains('math-mode')) {
+                        cell.element.innerText = generateMathEquation(cell.count);
+                    } else {
+                        cell.element.innerText = cell.count;
+                    }
+                    cell.element.classList.add(`c-${cell.count}`);
+                } else {
+                    floodFill(r, c);
+                }
+                checkLevelComplete();
+            }
+        }
+        
+        function tryChord(r, c) {
+            const cell = gameState.board[r][c];
+            if (cell.count === 0) return;
+
+            let flagCount = 0;
+            for (let i = -1; i <= 1; i++) {
+                for (let j = -1; j <= 1; j++) {
+                    let nr = r + i, nc = c + j;
+                    if (nr >= 0 && nr < gameState.rows && nc >= 0 && nc < gameState.cols) {
+                        if (gameState.board[nr][nc].isFlag) flagCount++;
+                    }
+                }
+            }
+
+            if (flagCount === cell.count) {
+                for (let i = -1; i <= 1; i++) {
+                    for (let j = -1; j <= 1; j++) {
+                        let nr = r + i, nc = c + j;
+                        if (nr >= 0 && nr < gameState.rows && nc >= 0 && nc < gameState.cols) {
+                            let neighbor = gameState.board[nr][nc];
+                            if (!neighbor.isOpen && !neighbor.isFlag) {
+                                clickCell(nr, nc);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        function floodFill(r, c) {
+            for(let i=-1; i<=1; i++){
+                for(let j=-1; j<=1; j++){
+                    let nr = r+i, nc = c+j;
+                    if(nr>=0 && nr<gameState.rows && nc>=0 && nc<gameState.cols) {
+                        let neighbor = gameState.board[nr][nc];
+                        if(!neighbor.isOpen && !neighbor.isFlag) clickCell(nr, nc);
+                    }
+                }
+            }
+        }
+
+        function generateMines(safeR, safeC) {
+            let newCells = [];
+            for(let r=0; r<gameState.rows; r++) {
+                for(let c=0; c<gameState.cols; c++) {
+                    if(gameState.board[r][c].isNewZone && !gameState.board[r][c].isMine) {
+                        newCells.push(gameState.board[r][c]);
+                    }
+                }
+            }
+            let density = DIFFICULTIES[gameState.difficulty].mineDensity;
+            let count = Math.max(1, Math.floor(newCells.length * density));
+            let placed = 0, attempts = 0;
+
+            while(placed < count && attempts < 10000) {
+                attempts++;
+                let cell = newCells[Math.floor(Math.random() * newCells.length)];
+                if(Math.abs(cell.r - safeR) <= 1 && Math.abs(cell.c - safeC) <= 1) continue;
+                
+                let nearOpen = false;
+                for(let i=-1; i<=1; i++){
+                    for(let j=-1; j<=1; j++){
+                        let nr = cell.r+i, nc = cell.c+j;
+                        if(nr>=0 && nr<gameState.rows && nc>=0 && nc<gameState.cols && gameState.board[nr][nc].isOpen) nearOpen = true;
+                    }
+                }
+                if(nearOpen) continue;
+
+                if(!cell.isMine) {
+                    cell.isMine = true;
+                    placed++;
+                }
+            }
+            newCells.forEach(c => c.isNewZone = false);
+        }
+
+        function recalculateNumbers() {
+            for(let r=0; r<gameState.rows; r++) {
+                for(let c=0; c<gameState.cols; c++) {
+                    if(!gameState.board[r][c].isMine) {
+                        let cnt = 0;
+                        for(let i=-1; i<=1; i++)
+                            for(let j=-1; j<=1; j++) {
+                                let nr=r+i, nc=c+j;
+                                if(nr>=0 && nr<gameState.rows && nc>=0 && nc<gameState.cols && gameState.board[nr][nc].isMine) cnt++;
+                            }
+                        gameState.board[r][c].count = cnt;
+                        if(gameState.board[r][c].isOpen && gameState.board[r][c].count > 0 && gameState.board[r][c].element) {
+                             if(document.body.classList.contains('math-mode')) {
+                                gameState.board[r][c].element.innerText = generateMathEquation(cnt);
+                             } else {
+                                gameState.board[r][c].element.innerText = cnt;
+                             }
+                             gameState.board[r][c].element.className = 'cell open c-' + cnt;
+                        }
+                    }
+                }
+            }
+        }
+
+        function checkLevelComplete() {
+            let remaining = 0;
+            gameState.board.flat().forEach(c => { if(!c.isMine && !c.isOpen) remaining++; });
+            if(remaining === 0) nextLevel();
+        }
+
+        function gameOver() {
+            gameState.gameOver = true;
+            statusEl.innerText = "СИГНАЛ ПОТЕРЯН. ВЫ ПОГИБЛИ.";
+            statusEl.style.color = "red";
+            clearInterval(eventTimer);
+            clearInterval(gameTimerInterval);
+            switchTrack('menu');
+            document.body.classList.remove('horror-mode');
+            gameState.board.flat().forEach(c => {
+                if(c.isMine && !c.isOpen) {
+                    c.element.classList.add('mine-fatal');
+                    c.element.innerText = 'X';
+                }
+            });
+        }
+
+        function triggerShockwave(originR, originC) {
+            playSound('explosion');
+            gameState.board.flat().forEach(cell => {
+                const dist = Math.sqrt(Math.pow(cell.r - originR, 2) + Math.pow(cell.c - originC, 2));
+                const delay = dist * 0.05;
+                cell.element.style.animationDelay = delay + 's';
+                cell.element.classList.add('cell-shockwave');
+                setTimeout(() => {
+                    cell.element.classList.remove('cell-shockwave');
+                    cell.element.style.animationDelay = '0s';
+                }, 1000 + (delay * 1000));
+            });
+        }
+
+        /* =========================================
+           ЭВЕНТЫ И ХАОС
+           ========================================= */
+        function startEventTimer() {
+            if(eventTimer) clearInterval(eventTimer);
+            let interval = DIFFICULTIES[gameState.difficulty].eventInterval;
+            eventTimer = setInterval(() => { if(!gameState.gameOver) triggerChaos(); }, interval);
+        }
+
+        function clearAllEffects() {
+            slipperyActive = false;
+            document.body.classList.remove('slippery-mode', 'lights-out-active', 'morph-active', 'math-mode', 'blizzard-active', 'monochrome-active');
+            if(gameState.board) boardEl.classList.remove('flipped', 'pulsing');
+            if(slipperyFrame) cancelAnimationFrame(slipperyFrame);
+            
+            if(gameState.board.length > 0) {
+                gameState.board.flat().forEach(c => {
+                    if(c.element) {
+                        if (c.isOpen && c.count > 0 && !c.isMine) c.element.innerText = c.count; // Reset math
+                        c.element.classList.remove('cell-crater');
+                    }
+                });
+            }
+            statusEl.style.color = gameState.mode === 'christmas' ? '#fff' : 'var(--primary)';
+        }
+
+        // --- ИВЕНТЫ ---
+        function eventMeteorShower() {
+            playSound('falling');
+            statusEl.innerText = ">>> ВНИМАНИЕ: ОРБИТАЛЬНЫЙ УДАР";
+            statusEl.style.color = "red";
+            
+            setTimeout(() => {
+                flashOverlay.classList.add('flash-active');
+                setTimeout(()=>flashOverlay.classList.remove('flash-active'), 1000);
+                playSound('boom');
+                document.body.classList.add('violent-shake');
+                setTimeout(()=>document.body.classList.remove('violent-shake'), 500);
+
+                const startR = Math.floor(Math.random() * (gameState.rows - 3));
+                const startC = Math.floor(Math.random() * (gameState.cols - 3));
+
+                for (let r = startR; r < startR + 3; r++) {
+                    for (let c = startC; c < startC + 3; c++) {
+                        if (r >= 0 && r < gameState.rows && c >= 0 && c < gameState.cols) {
+                            let cell = gameState.board[r][c];
+                            cell.isOpen = false; 
+                            cell.isFlag = false;
+                            cell.isMine = Math.random() < 0.3; // Random mess
+                            cell.element.classList.add('cell-crater');
+                            cell.element.classList.remove('open');
+                        }
+                    }
+                }
+                recalculateNumbers();
+                renderBoard();
+                statusEl.innerText = ">>> УДАР ПОДТВЕРЖДЕН. СЕКТОР ПОВРЕЖДЕН.";
+            }, 1500);
+        }
+
+        function eventBoardFlip() {
+             playSound('flip');
+             statusEl.innerText = ">>> ГРАВИТАЦИОННАЯ ИНВЕРСИЯ";
+             boardEl.classList.add('flipped');
+             setTimeout(() => {
+                 boardEl.classList.remove('flipped');
+             }, 10000);
+        }
+
+        function eventMonochrome() {
+             statusEl.innerText = ">>> ОШИБКА ВИДЕОДРАЙВЕРА: МОНОХРОМ";
+             document.body.classList.add('monochrome-active');
+             setTimeout(() => document.body.classList.remove('monochrome-active'), 8000);
+        }
+        
+        function eventPulse() {
+             statusEl.innerText = ">>> НЕСТАБИЛЬНОСТЬ ЯДРА";
+             boardEl.classList.add('pulsing');
+             setTimeout(() => boardEl.classList.remove('pulsing'), 8000);
+        }
+
+        function eventSlipperyMouse() {
+            slipperyActive = true;
+            document.body.classList.add('slippery-mode');
+            cursorX = mouseX; cursorY = mouseY;
+            cursorVelX = 0; cursorVelY = 0;
+            
+            function updateCursor() {
+                if(!slipperyActive) return;
+                let dx = mouseX - cursorX;
+                let dy = mouseY - cursorY;
+                cursorVelX += dx * 0.03; cursorVelY += dy * 0.03;
+                cursorVelX *= 0.92; cursorVelY *= 0.92;
+                cursorX += cursorVelX; cursorY += cursorVelY;
+                cursorEl.style.left = cursorX + 'px'; cursorEl.style.top = cursorY + 'px';
+                let target = document.elementFromPoint(cursorX, cursorY);
+                document.querySelectorAll('.cell').forEach(c => c.style.boxShadow = ""); 
+                if (target && target.classList.contains('cell')) target.style.boxShadow = "0 0 10px #ff003c";
+                slipperyFrame = requestAnimationFrame(updateCursor);
+            }
+            updateCursor();
+            setTimeout(() => {
+                slipperyActive = false;
+                document.body.classList.remove('slippery-mode');
+            }, 8000);
+        }
+
+        function generateMathEquation(num) {
+            const types = ['+', '-'];
+            const type = types[Math.floor(Math.random() * types.length)];
+            if (type === '+') {
+                let a = Math.floor(Math.random() * num);
+                return `${a}+${num-a}`;
+            } else {
+                let a = num + Math.floor(Math.random() * 5);
+                return `${a}-${a-num}`;
+            }
+        }
+
+        function eventMathHazard() {
+            document.body.classList.add('math-mode');
+            playSound('math');
+            gameState.board.flat().forEach(c => {
+                if (c.isOpen && c.count > 0 && !c.isMine && c.element) c.element.innerText = generateMathEquation(c.count);
+            });
+            setTimeout(() => {
+                document.body.classList.remove('math-mode');
+                gameState.board.flat().forEach(c => {
+                    if (c.isOpen && c.count > 0 && !c.isMine && c.element) c.element.innerText = c.count;
+                });
+            }, 20000);
+        }
+
+        function triggerChaos() {
+            playSound('event');
+            document.body.classList.remove('lights-out-active', 'morph-active', 'blizzard-active');
+            
+            let possibleEvents = [];
+
+            // EVENT POOLING
+            if (gameState.mode === 'practice') {
+                possibleEvents = [
+                    { msg: ">>> ОРБИТАЛЬНЫЙ УДАР", action: eventMeteorShower },
+                    { msg: ">>> ГРАВИТАЦИОННАЯ ИНВЕРСИЯ (FLIP)", action: eventBoardFlip },
+                    { msg: ">>> МОНОХРОМНЫЙ СБОЙ", action: eventMonochrome },
+                    { msg: ">>> УТЕЧКА МАСЛА (PHYSICS)", action: eventSlipperyMouse },
+                    { msg: ">>> МАТЕМАТИЧЕСКИЙ СБОЙ", action: eventMathHazard },
+                    { msg: ">>> НЕСТАБИЛЬНОСТЬ ЯДРА", action: eventPulse },
+                    { msg: ">>> ОТКАЗ ОСВЕЩЕНИЯ", action: () => { document.body.classList.add('lights-out-active'); setTimeout(() => document.body.classList.remove('lights-out-active'), 8000); }},
+                    { msg: ">>> СБОЙ ГЕОМЕТРИИ", action: () => { document.body.classList.add('morph-active'); setTimeout(() => document.body.classList.remove('morph-active'), 6000); }}
+                ];
+            } else if (gameState.mode === 'christmas') {
+                possibleEvents = [
+                    { msg: ">>> ВНИМАНИЕ: СИЛЬНАЯ МЕТЕЛЬ", action: () => { document.body.classList.add('blizzard-active'); setTimeout(() => document.body.classList.remove('blizzard-active'), 8000); }},
+                    { msg: ">>> ГОЛОЛЕД НА ПУЛЬТЕ", action: eventSlipperyMouse },
+                    { msg: ">>> ЭЛЬФЫ ШУТЯТ: МАТЕМАТИКА", action: eventMathHazard },
+                    { msg: ">>> СЕВЕРНЫЙ ВЕТЕР (FLIP)", action: eventBoardFlip }
+                ];
+            } else {
+                // STANDARD / HARD
+                possibleEvents = [
+                    { msg: ">>> ОТКАЗ ОСВЕЩЕНИЯ", action: () => { document.body.classList.add('lights-out-active'); setTimeout(() => document.body.classList.remove('lights-out-active'), 8000); }},
+                    { msg: ">>> ГРАВИТАЦИОННАЯ ИНВЕРСИЯ (FLIP)", action: eventBoardFlip },
+                    { msg: ">>> СБОЙ ГЕОМЕТРИИ ПОЛЯ", action: () => { document.body.classList.add('morph-active'); setTimeout(() => document.body.classList.remove('morph-active'), 6000); }},
+                    { msg: ">>> УТЕЧКА МАСЛА НА ПУЛЬТ", action: eventSlipperyMouse },
+                    { msg: ">>> ВЫЧИСЛИТЕЛЬНЫЙ МОДУЛЬ: МАТЕМАТИКА", action: eventMathHazard }
+                ];
+            }
+
+            const evt = possibleEvents[Math.floor(Math.random() * possibleEvents.length)];
+            statusEl.innerText = evt.msg; 
+            statusEl.style.color = "yellow";
+            evt.action();
+        }
+        
+    </script>
+</body>
+</html>Ф
